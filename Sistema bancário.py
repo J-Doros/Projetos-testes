@@ -1,25 +1,30 @@
-from datetime import datetime
+import datetime
 
 
-class ContaBancaria:
-    def __init__(self, titular, saldo_inicial=0):
-        self.titular = titular
-        self.saldo = saldo_inicial
+class Usuario:
+    def __init__(self, nome, data_nascimento, cpf, endereco):
+        self.nome = nome
+        self.data_nascimento = data_nascimento
+        self.cpf = cpf
+        self.endereco = endereco
+
+
+class ContaCorrente:
+    proximo_numero_conta = 1
+
+    def __init__(self, usuario):
+        self.agencia = '0001'
+        self.numero_conta = ContaCorrente.proximo_numero_conta
+        self.usuario = usuario
+        self.saldo = 0.0
         self.extrato = []
         self.saques_diarios = {}
         self.LIMITE_SAQUE_DIARIO = 500.00
         self.MAX_SAQUES_DIARIOS = 3
-
-    def depositar(self, valor):
-        if valor > 0:
-            self.saldo += valor
-            self.extrato.append(f"{datetime.now()} - Depósito: +R${valor:.2f}")
-            print(f"Depósito de R${valor:.2f} realizado com sucesso.")
-        else:
-            print("Valor de depósito inválido. Tente novamente.")
+        ContaCorrente.proximo_numero_conta += 1
 
     def pode_sacar(self, valor):
-        hoje = datetime.now().date()
+        hoje = datetime.date.today()
         if hoje not in self.saques_diarios:
             self.saques_diarios[hoje] = {'valor_total': 0, 'quantidade': 0}
         saques_hoje = self.saques_diarios[hoje]
@@ -31,72 +36,166 @@ class ContaBancaria:
             return False
         return True
 
-    def registrar_saque(self, valor):
-        hoje = datetime.now().date()
-        self.saques_diarios[hoje]['valor_total'] += valor
-        self.saques_diarios[hoje]['quantidade'] += 1
-
     def sacar(self, valor):
-        if valor > 0 and valor <= self.saldo:
+        if valor > 0 and self.saldo >= valor:
             if self.pode_sacar(valor):
                 self.saldo -= valor
-                self.registrar_saque(valor)
-                self.extrato.append(f"{datetime.now()} - Saque: -R${valor:.2f}")
+                self.extrato.append(f"{datetime.datetime.now()} - Saque: -R${valor:.2f}")
+                self.saques_diarios[datetime.date.today()]['valor_total'] += valor
+                self.saques_diarios[datetime.date.today()]['quantidade'] += 1
                 print(f"Saque de R${valor:.2f} realizado com sucesso.")
-        elif valor > self.saldo:
-            print("Saldo insuficiente.")
+            else:
+                print("Operação de saque não permitida.")
         else:
-            print("Valor de saque inválido. Tente novamente.")
+            print("Saldo insuficiente ou valor de saque inválido.")
+
+    def depositar(self, valor):
+        if valor > 0:
+            self.saldo += valor
+            self.extrato.append(f"{datetime.datetime.now()} - Depósito: +R${valor:.2f}")
+            print(f"Depósito de R${valor:.2f} realizado com sucesso.")
+        else:
+            print("Valor de depósito inválido.")
 
     def ver_extrato(self):
-        print(f"\nExtrato da conta de {self.titular}:")
+        print("\nExtrato da conta:")
         for transacao in self.extrato:
             print(transacao)
         print(f"Saldo atual: R${self.saldo:.2f}\n")
 
 
-# Função para validar entradas numéricas
-def obter_valor_positivo(prompt):
+class SistemaBancario:
+    def __init__(self):
+        self.usuarios = []
+        self.contas = []
+
+    def cadastrar_usuario(self, nome, data_nascimento, cpf, endereco):
+        # Verifica se o CPF já está cadastrado
+        for usuario in self.usuarios:
+            if usuario.cpf == cpf:
+                print("CPF já cadastrado. Não é possível cadastrar o usuário.")
+                return
+
+        # Extrai apenas os números do CPF
+        cpf_numeros = ''.join(filter(str.isdigit, cpf))
+
+        # Cria o usuário e o adiciona à lista de usuários
+        usuario = Usuario(nome, data_nascimento, cpf_numeros, endereco)
+        self.usuarios.append(usuario)
+        print("Usuário cadastrado com sucesso.")
+        return usuario
+
+    def cadastrar_conta_corrente(self, cpf_usuario):
+        # Busca o usuário pelo CPF
+        usuario = None
+        for u in self.usuarios:
+            if u.cpf == cpf_usuario:
+                usuario = u
+                break
+
+        if usuario is None:
+            print(f"Usuário com CPF {cpf_usuario} não encontrado.")
+            return None
+
+        # Cria uma nova conta corrente para o usuário
+        conta = ContaCorrente(usuario)
+        self.contas.append(conta)
+        print(f"Conta corrente cadastrada para o usuário {usuario.nome}.")
+        return conta
+
+    def buscar_conta_por_cpf(self, cpf):
+        # Busca a conta corrente pelo CPF do usuário associado
+        for conta in self.contas:
+            if conta.usuario.cpf == cpf:
+                return conta
+        return None
+
+    def buscar_usuario_por_cpf(self, cpf):
+        # Busca um usuário pelo CPF
+        for usuario in self.usuarios:
+            if usuario.cpf == cpf:
+                return usuario
+        return None
+
+
+# Função para validar a data de nascimento
+def validar_data_nascimento(data):
+    try:
+        datetime.datetime.strptime(data, '%d/%m/%Y')
+        return True
+    except ValueError:
+        return False
+
+
+# Função para cadastrar um novo usuário
+def cadastrar_novo_usuario(sistema_bancario):
+    print("Cadastro de Novo Usuário")
+    nome = input("Nome: ")
+    data_nascimento = input("Data de Nascimento (dd/mm/aaaa): ")
+    while not validar_data_nascimento(data_nascimento):
+        print("Formato de data inválido. Use dd/mm/aaaa.")
+        data_nascimento = input("Data de Nascimento (dd/mm/aaaa): ")
+    cpf = input("CPF (somente números): ")
+    endereco = input("Endereço (formato: logradouro, nro - bairro - cidade/UF): ")
+
+    usuario = sistema_bancario.cadastrar_usuario(nome, data_nascimento, cpf, endereco)
+    return usuario
+
+
+# Função para cadastrar uma nova conta corrente
+def cadastrar_nova_conta_corrente(sistema_bancario):
+    cpf = input("Digite o CPF do usuário para cadastrar a conta corrente: ")
+    conta = sistema_bancario.cadastrar_conta_corrente(cpf)
+    return conta
+
+
+# Função principal para interação com o usuário
+def menu_principal(sistema_bancario):
     while True:
-        try:
-            valor = float(input(prompt))
-            if valor > 0:
-                return valor
-            else:
-                print("Por favor, insira um valor positivo.")
-        except ValueError:
-            print("Entrada inválida. Por favor, insira um número.")
+        print("\nMenu Principal")
+        print("1. Cadastrar Novo Usuário")
+        print("2. Cadastrar Conta Corrente")
+        print("3. Depositar")
+        print("4. Sacar")
+        print("5. Ver Extrato")
+        print("6. Sair")
 
-
-# Função principal para interagir com o usuário
-def sistema_bancario():
-    titular = input("Digite o nome do titular da conta: ")
-    saldo_inicial = obter_valor_positivo("Digite o saldo inicial da conta: ")
-    conta = ContaBancaria(titular, saldo_inicial)
-
-    while True:
-        print("\nEscolha uma operação:")
-        print("1. Depositar")
-        print("2. Sacar")
-        print("3. Ver Extrato")
-        print("4. Sair")
-
-        opcao = input("Digite a opção desejada (1, 2, 3, 4): ")
+        opcao = input("Digite a opção desejada: ")
 
         if opcao == '1':
-            valor = obter_valor_positivo("Digite o valor a ser depositado: ")
-            conta.depositar(valor)
+            cadastrar_novo_usuario(sistema_bancario)
         elif opcao == '2':
-            valor = obter_valor_positivo("Digite o valor a ser sacado: ")
-            conta.sacar(valor)
+            cadastrar_nova_conta_corrente(sistema_bancario)
         elif opcao == '3':
-            conta.ver_extrato()
+            cpf = input("Digite o CPF do usuário para realizar o depósito: ")
+            conta = sistema_bancario.buscar_conta_por_cpf(cpf)
+            if conta:
+                valor = float(input("Digite o valor a ser depositado: "))
+                conta.depositar(valor)
+            else:
+                print("Conta não encontrada.")
         elif opcao == '4':
-            print("Obrigado por usar o nosso banco,volte sempre :)!")
+            cpf = input("Digite o CPF do usuário para realizar o saque: ")
+            conta = sistema_bancario.buscar_conta_por_cpf(cpf)
+            if conta:
+                valor = float(input("Digite o valor a ser sacado: "))
+                conta.sacar(valor)
+            else:
+                print("Conta não encontrada.")
+        elif opcao == '5':
+            cpf = input("Digite o CPF do usuário para ver o extrato: ")
+            conta = sistema_bancario.buscar_conta_por_cpf(cpf)
+            if conta:
+                conta.ver_extrato()
+            else:
+                print("Conta não encontrada.")
+        elif opcao == '6':
+            print("Saindo do programa. Até mais!")
             break
         else:
             print("Opção inválida. Tente novamente.")
 
 
 # Iniciar o sistema bancário
-sistema_bancario()
+sistema = SistemaBancario()
+menu_principal(sistema)
